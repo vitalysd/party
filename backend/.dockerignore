@@ -1,0 +1,6 @@
+.env
+.test-deps
+__pycache__
+*.pyc
+uploads
+tests

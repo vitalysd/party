@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@theme {
+  --color-pati-dark: #0c0d14;
+  --color-pati-recessed: #0a0a12;
+  --color-pati-sidebar: #0f101b;
+  --color-pati-panel: #131422;
+  --color-pati-surface: #191b2c;
+  --color-pati-surface-elevated: #22253b;
+  --color-pati-surface-hover: #2a2d48;
+  --color-pati-border-subtle: #1f2136;
+  --color-pati-border-strong: #3b3f63;
+  --color-pati-border: #292c47;
+  --color-pati-accent: #7c5cfc;
+  --color-pati-accent-hover: #8f72ff;
+  --color-pati-accent-light: #9d85ff;
+  --color-pati-accent-subtle: color-mix(in srgb, var(--color-pati-accent) 15%, transparent);
+  --color-pati-accent-text: #cfc5ff;
+  --color-pati-accent-muted: #8376b5;
+  --color-pati-accent-panel: #211d3d;
+  --color-pati-accent-panel-end: #1a182e;
+  --color-pati-accent-border: #3b3464;
+  --color-pati-green-light: #4ade80;
+  --color-pati-green-text: #86efac;
+  --color-pati-green: #22c55e;
+  --color-pati-red: #f43f5e;
+  --color-pati-red-hover: #e11d48;
+  --color-pati-red-light: #fb7185;
+  --color-pati-red-text: #fda4af;
+  --color-pati-warning: #f59e0b;
+  --color-pati-warning-text: #fde68a;
+  --color-pati-offline: #64748b;
+  --color-pati-text-primary: #f1f5f9;
+  --color-pati-text-secondary: #b5b9d5;
+  --color-pati-text-dim: #6e729a;
+  --color-pati-text-disabled: #585c80;
+  --color-pati-text-muted: #8e92bc;
+
+  --shadow-pati-speaking: 0 0 12px color-mix(in srgb, var(--color-pati-green) 50%, transparent);
+  --shadow-pati-voice: 0 0 24px color-mix(in srgb, var(--color-pati-accent) 25%, transparent);
+  --background-image-pati-room-glow: radial-gradient(circle at 70% 50%, color-mix(in srgb, var(--color-pati-accent) 18%, transparent), transparent 60%);
+
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  :where(button, a[href], summary, label[for], select,
+    input[type="button"], input[type="submit"], input[type="reset"],
+    input[type="checkbox"], input[type="radio"], input[type="range"], input[type="file"], input[type="color"],
+    [role="button"], [role="link"], [role="tab"], [role="menuitem"],
+    [role="checkbox"], [role="radio"], [role="switch"], [role="slider"]) {
+    cursor: pointer;
+  }
+
+  :where(button, input, select, textarea, [role]):is(:disabled, [aria-disabled="true"]) {
+    cursor: not-allowed;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-pati-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-pati-border-strong);
+}
+
+/* Animations for speaking audio pulse */
+@keyframes voice-ripple {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-pati-accent) 60%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.speaking-pulse {
+  animation: voice-ripple 1.5s infinite;
+}

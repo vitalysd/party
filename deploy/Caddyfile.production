@@ -1,0 +1,35 @@
+{
+    auto_https disable_redirects
+}
+http://185-18-52-100.sslip.io {
+    redir https://185-18-52-100.sslip.io:9443{uri} permanent
+}
+https://185-18-52-100.sslip.io:9443 {
+    tls {
+        issuer acme {
+            disable_tlsalpn_challenge
+        }
+    }
+    encode gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        X-Frame-Options DENY
+    }
+    handle_path /livekit* {
+        reverse_proxy livekit:7880
+    }
+    @api path /api/* /ws /uploads/* /health
+    handle @api {
+        request_body {
+            max_size 27MB
+        }
+        reverse_proxy backend:8000
+    }
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        header Cache-Control no-cache
+        file_server
+    }
+}

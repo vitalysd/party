@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pati_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pati_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pati_secret_password}
+      POSTGRES_DB: ${POSTGRES_DB:-pati_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pati_user} -d ${POSTGRES_DB:-pati_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: chrislusf/seaweedfs:latest
+    container_name: pati_s3
+    restart: unless-stopped
+    command: "server -s3 -s3.port=9000 -dir=/data"
+    ports:
+      - "9000:9000"
+    volumes:
+      - s3_data:/data
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: pati_livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./deploy/livekit.yaml:/etc/livekit.yaml
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50050:50000-50050/udp"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pati_backend
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      livekit:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  s3_data:

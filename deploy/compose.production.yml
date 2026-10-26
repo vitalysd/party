@@ -1,0 +1,55 @@
+name: pati
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    mem_limit: 220m
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U pati_user -d pati_db']
+      interval: 5s
+      retries: 12
+    logging: &logs
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    command: [uvicorn, app.main:app, --host, 0.0.0.0, --port, '8000', --proxy-headers, --forwarded-allow-ips, '*', --no-access-log]
+    volumes:
+      - ./uploads:/app/uploads
+    mem_limit: 230m
+    depends_on:
+      postgres: {condition: service_healthy}
+    logging: *logs
+  livekit:
+    image: livekit/livekit-server:v1.13.10
+    restart: unless-stopped
+    command: [--config, /etc/livekit.yaml]
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - '7881:7881/tcp'
+      - '50000-50050:50000-50050/udp'
+    mem_limit: 190m
+    logging: *logs
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '9443:9443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 100m
+    logging: *logs
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
