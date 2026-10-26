@@ -12,7 +12,7 @@ if (root / '.env').exists():
 db_password, jwt_secret, lk_secret = (secrets.token_hex(32) for _ in range(3))
 lk_key = secrets.token_hex(12)
 bootstrap = 'PATI-' + secrets.token_hex(12).upper()
-origin = 'https://185-18-52-100.sslip.io:9443'
+origin = 'https://31-172-67-27.sslip.io'
 env = dict(ENVIRONMENT='production', AUTO_CREATE_SCHEMA='false',
     SECRET_KEY=jwt_secret, BOOTSTRAP_INVITE_CODE=bootstrap,
     POSTGRES_USER='pati_user', POSTGRES_PASSWORD=db_password, POSTGRES_DB='pati_db',
