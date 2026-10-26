@@ -46,6 +46,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -60,7 +61,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       get().setAuth(data.access_token, data.user);
       return true;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      set({ error: err.name === 'TimeoutError' ? 'Сервер не ответил. Проверьте подключение и попробуйте снова.' : err.message, isLoading: false });
       return false;
     } finally {
       set({ isLoading: false });
@@ -71,6 +72,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

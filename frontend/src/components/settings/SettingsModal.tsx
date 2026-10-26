@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { SoundSettings } from './SoundSettings';
+import { DesktopNotificationSettings } from './DesktopNotifications';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
 import { Avatar } from '../ui/Avatar';
@@ -141,6 +142,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         {/* Modal Body */}
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-5">
           <SoundSettings />
+          <DesktopNotificationSettings />
           {errorMsg && (
             <div className="p-3 bg-pati-red/15 border border-pati-red/30 rounded-xl text-pati-red-text text-xs">
               {errorMsg}

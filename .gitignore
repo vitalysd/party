@@ -1,4 +1,8 @@
 .env
+.build-tools/
+frontend/src-tauri/gen/
+frontend/src-tauri/icons/android/
+frontend/src-tauri/icons/ios/
 .env.*
 !.env.example
 artifacts/

@@ -10,6 +10,7 @@ import { VoiceAudio } from './components/voice/VoiceAudio';
 import { PrivateCallPrompt } from './components/voice/PrivateCallPrompt';
 import { useVoiceStore } from './store/voiceStore';
 import { AppSounds } from './components/voice/AppSounds';
+import { DesktopNotifications } from './components/settings/DesktopNotifications';
 
 export const App: React.FC = () => {
   const { token, isAuthenticated, fetchMe } = useAuthStore();
@@ -46,6 +47,7 @@ export const App: React.FC = () => {
     <div className="h-full w-full overflow-hidden bg-pati-dark">
       {isAuthenticated && <VoiceAudio />}
       {isAuthenticated && <AppSounds />}
+      {isAuthenticated && <DesktopNotifications />}
       {isAuthenticated && <PrivateCallPrompt />}
       {!isAuthenticated && <AuthModal />}
       {isAuthenticated && isSettingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}

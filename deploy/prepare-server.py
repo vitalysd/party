@@ -19,7 +19,7 @@ env = dict(ENVIRONMENT='production', AUTO_CREATE_SCHEMA='false',
     DATABASE_URL=f'postgresql+asyncpg://pati_user:{db_password}@postgres:5432/pati_db',
     LIVEKIT_URL='http://livekit:7880', LIVEKIT_PUBLIC_URL=origin.replace('https:', 'wss:')+'/livekit',
     LIVEKIT_API_KEY=lk_key, LIVEKIT_API_SECRET=lk_secret,
-    CORS_ORIGINS=json.dumps([origin]), UPLOAD_DIR='/app/uploads',
+    CORS_ORIGINS=json.dumps([origin, 'http://tauri.localhost', 'https://tauri.localhost', 'tauri://localhost']), UPLOAD_DIR='/app/uploads',
     MINIO_ENDPOINT='127.0.0.1:9')
 (root / '.env').write_text('\n'.join(f'{k}={v}' for k,v in env.items())+'\n')
 (root / 'livekit.yaml').write_text(f'''port: 7880

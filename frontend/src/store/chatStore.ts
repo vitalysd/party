@@ -422,6 +422,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
         if (type === 'NEW_MESSAGE') {
           const newMsg: Message = data;
+          if (typeof window !== 'undefined' && !(get().messages[newMsg.channel_id] || []).some(message => message.id === newMsg.id)) {
+            window.dispatchEvent(new CustomEvent('pati:new-message', { detail: newMsg }));
+          }
           set(state => {
             const currentList = state.messages[newMsg.channel_id] || [];
 
