@@ -46,6 +46,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./frontend/dist:/srv:ro
+      - ./updates:/updates:ro
       - caddy_data:/data
       - caddy_config:/config
     mem_limit: 100m

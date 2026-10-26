@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DesktopUpdateButton } from '../settings/DesktopUpdateButton';
 import { useAuthStore } from '../../store/authStore';
 import { useModalFocus } from '../ui/useModalFocus';
 import {
@@ -206,6 +207,7 @@ export const AuthModal: React.FC = () => {
         <div className="mt-6 text-center text-xs text-pati-text-dim flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-pati-accent" />
           <span>Приватное пространство для своих</span>
+          <DesktopUpdateButton />
         </div>
       </div>
     </div>

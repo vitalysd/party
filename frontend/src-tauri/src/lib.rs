@@ -13,6 +13,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show_main(app)))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Открыть пати", true, None::<&str>)?;

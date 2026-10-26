@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "notification:default",
+    "updater:default",
     "core:window:allow-is-focused",
     "core:window:allow-show",
     "core:window:allow-unminimize",

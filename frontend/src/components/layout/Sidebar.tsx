@@ -1,4 +1,5 @@
 import { FriendsList } from '../friends/FriendsList';
+import { DesktopUpdateButton } from '../settings/DesktopUpdateButton';
 import React, { useEffect, useState, useRef } from 'react';
 import { RoomDialog } from './RoomDialog';
 import { RoomIcon } from '../ui/RoomIcon';
@@ -135,6 +136,7 @@ export const Sidebar: React.FC = () => {
         </button>
 
         <div className="flex items-center gap-1 shrink-0">
+          <DesktopUpdateButton />
           <button
             onClick={() => void invite()} disabled={inviting}
             className="p-1.5 text-pati-text-muted hover:text-white hover:bg-pati-surface-elevated rounded-lg transition"

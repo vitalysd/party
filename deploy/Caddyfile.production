@@ -20,6 +20,11 @@ https://31-172-67-27.sslip.io {
         reverse_proxy livekit:7880
     }
     @api path /api/* /ws /uploads/* /health
+    handle_path /updates/* {
+        root * /updates
+        header Cache-Control no-cache
+        file_server
+    }
     handle @api {
         request_body {
             max_size 27MB
