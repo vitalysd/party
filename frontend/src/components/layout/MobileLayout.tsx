@@ -98,7 +98,7 @@ export const MobileLayout: React.FC = () => {
               </div>
               <button
                 onClick={() => {
-                  void copyInvite().then(() => alert('Приглашение скопировано')).catch(() => alert('Не удалось создать приглашение'));
+                  void copyInvite().then(() => alert('Код приглашения скопирован')).catch(() => alert('Не удалось создать приглашение'));
                   
                 }}
                 className="p-2.5 bg-pati-accent hover:bg-pati-accent-hover text-white rounded-xl shadow-md shadow-pati-accent/20"

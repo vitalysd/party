@@ -111,7 +111,7 @@ export const Sidebar: React.FC = () => {
       {dialog && <RoomDialog room={dialog === 'new' ? undefined : dialog} onClose={() => setDialog(null)} />}
 
       {/* User Status Bar (Bottom Left) */}
-      {inviteCopied && <p role="status" className="px-3 py-2 text-[11px] text-pati-green-text">Ссылка приглашения скопирована</p>}
+      {inviteCopied && <p role="status" className="px-3 py-2 text-[11px] text-pati-green-text">Код приглашения скопирован</p>}
       {inviteError && <p role="alert" className="px-3 py-2 text-xs text-pati-red-text">{inviteError}</p>}
       <div className="p-3 bg-pati-recessed border-t border-pati-border-subtle flex items-center justify-between">
         <button type="button"
@@ -140,7 +140,7 @@ export const Sidebar: React.FC = () => {
           <button
             onClick={() => void invite()} disabled={inviting}
             className="p-1.5 text-pati-text-muted hover:text-white hover:bg-pati-surface-elevated rounded-lg transition"
-            title={inviteCopied ? 'Приглашение скопировано' : 'Добавить друга'}
+            title={inviteCopied ? 'Код приглашения скопирован' : 'Добавить друга'}
             aria-label="Добавить друга"
           >
             {inviteCopied ? <Check className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}

@@ -40,7 +40,7 @@ export const VoiceRoomView: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              void copyInvite().then(() => alert('Приглашение скопировано')).catch(() => alert('Не удалось создать приглашение'));
+              void copyInvite().then(() => alert('Код приглашения скопирован')).catch(() => alert('Не удалось создать приглашение'));
               
             }}
             className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-pati-surface-elevated hover:bg-pati-surface-hover text-white text-xs font-semibold rounded-xl border border-pati-border-strong flex items-center gap-1.5 transition active:scale-95"
