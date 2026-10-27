@@ -1,6 +1,6 @@
 [package]
 name = "pati"
-version = "1.1.3"
+version = "1.1.4"
 description = "пати — рядом со своими"
 edition = "2021"
 
@@ -19,3 +19,6 @@ tauri-plugin-updater = "2"
 tauri-plugin-shell = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Win32_Foundation"] }

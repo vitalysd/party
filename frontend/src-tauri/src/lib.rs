@@ -1,4 +1,5 @@
 use tauri::{Manager, menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState}};
+mod session;
 
 fn show_main(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -11,6 +12,8 @@ fn show_main(app: &tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(session::SessionLock::default())
+        .invoke_handler(tauri::generate_handler![session::save_session, session::load_session])
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show_main(app)))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { User } from '../types';
 import { API_BASE_URL } from '../utils/config';
+import { IS_DESKTOP } from '../utils/config';
+import { readBrowserSession, writeBrowserSession, persistNativeSession, readNativeSession } from '../utils/sessionStorage';
 
 interface AuthState {
   token: string | null;
@@ -8,6 +10,8 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  sessionReady: boolean;
+  restoreSession: () => Promise<void>;
 
   setAuth: (token: string, user: User) => void;
   login: (username: string, password: string) => Promise<boolean>;
@@ -19,27 +23,42 @@ interface AuthState {
   clearError: () => void;
 }
 
-function readStoredUser(): User | null {
-  try {
-    const stored = localStorage.getItem('pati_user');
-    return stored ? JSON.parse(stored) : null;
-  } catch {
-    localStorage.removeItem('pati_user');
-    return null;
-  }
-}
+const browserSession = readBrowserSession();
+let authGeneration = 0;
+let restoration: Promise<void> | undefined;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  token: localStorage.getItem('pati_token'),
-  user: readStoredUser(),
-  isAuthenticated: !!localStorage.getItem('pati_token'),
+  token: browserSession.token,
+  user: browserSession.user,
+  isAuthenticated: !!browserSession.token,
+  sessionReady: !IS_DESKTOP,
+  restoreSession: async () => {
+    if (get().sessionReady) return;
+    if (restoration) return restoration;
+    const generation = authGeneration;
+    restoration = (async () => {
+      const stored = await readNativeSession();
+      if (generation !== authGeneration) { set({ sessionReady: true }); return; }
+      if (stored?.present) {
+        const token = stored.session?.token ?? null;
+        const user = stored.session?.user ?? null;
+        writeBrowserSession(token, user);
+        set({ token, user, isAuthenticated: !!token, sessionReady: true });
+      } else {
+        const { token, user } = get();
+        if (token && user) await persistNativeSession({ token, user });
+        set({ sessionReady: true });
+      }
+    })();
+    try { await restoration; } finally { restoration = undefined; }
+  },
   isLoading: false,
   error: null,
 
   setAuth: (token: string, user: User) => {
-    localStorage.setItem('pati_token', token);
-    localStorage.setItem('pati_user', JSON.stringify(user));
-    set({ token, user, isAuthenticated: true, error: null });
+    authGeneration++;
+    writeBrowserSession(token, user);
+    set({ token, user, isAuthenticated: true, sessionReady: true, error: null });
   },
 
   login: async (username: string, password: string) => {
@@ -100,9 +119,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
-    localStorage.removeItem('pati_token');
-    localStorage.removeItem('pati_user');
-    set({ token: null, user: null, isAuthenticated: false, error: null });
+    authGeneration++;
+    writeBrowserSession(null, null);
+    set({ token: null, user: null, isAuthenticated: false, sessionReady: true, error: null });
   },
 
   fetchMe: async () => {
@@ -117,7 +136,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (response.ok) {
         const user = await response.json();
         if (get().token !== token) return;
-        localStorage.setItem('pati_user', JSON.stringify(user));
+        writeBrowserSession(token, user);
         set({ user });
       } else if (response.status === 401 || response.status === 403) {
         get().logout();
@@ -143,7 +162,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (response.ok) {
         const updated = await response.json();
         if (get().token !== token) return;
-        localStorage.setItem('pati_user', JSON.stringify(updated));
+        writeBrowserSession(token, updated);
         set({ user: updated });
       }
     } catch (err) {
@@ -172,7 +191,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (response.ok) {
         const updated = await response.json();
         if (get().token !== token) return false;
-        localStorage.setItem('pati_user', JSON.stringify(updated));
+        writeBrowserSession(token, updated);
         set({ user: updated });
         return true;
       }
@@ -185,3 +204,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.token === previous.token && state.user === previous.user) return;
+  if (state.token !== previous.token) authGeneration++;
+  void persistNativeSession(state.token && state.user ? { token: state.token, user: state.user } : null);
+});
