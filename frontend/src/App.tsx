@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore } from './store/authStore';
 import { useChatStore } from './store/chatStore';
 import { useUIStore } from './store/uiStore';
@@ -13,11 +14,20 @@ import { AppSounds } from './components/voice/AppSounds';
 import { DesktopNotifications } from './components/settings/DesktopNotifications';
 
 export const App: React.FC = () => {
-  const { token, isAuthenticated, fetchMe, sessionReady, restoreSession } = useAuthStore();
+  const { token, isAuthenticated, fetchMe, sessionReady, restoreSession, userId } = useAuthStore(useShallow(state => ({
+    token: state.token, isAuthenticated: state.isAuthenticated, fetchMe: state.fetchMe,
+    sessionReady: state.sessionReady, restoreSession: state.restoreSession, userId: state.user?.id,
+  })));
   useEffect(() => { void restoreSession(); }, [restoreSession]);
-  const incomingCall = useVoiceStore(state => state.call?.status === 'ringing' && state.call.callee_id === useAuthStore.getState().user?.id);
-  const { loadChannels, loadUsers, initWebSocket, disconnectWebSocket } = useChatStore();
-  const { isMobile, setIsMobile, isSettingsOpen, setSettingsOpen } = useUIStore();
+  const incomingCall = useVoiceStore(state => state.call?.status === 'ringing' && state.call.callee_id === userId);
+  const { loadChannels, loadUsers, initWebSocket, disconnectWebSocket } = useChatStore(useShallow(state => ({
+    loadChannels: state.loadChannels, loadUsers: state.loadUsers,
+    initWebSocket: state.initWebSocket, disconnectWebSocket: state.disconnectWebSocket,
+  })));
+  const { isMobile, setIsMobile, isSettingsOpen, setSettingsOpen } = useUIStore(useShallow(state => ({
+    isMobile: state.isMobile, setIsMobile: state.setIsMobile,
+    isSettingsOpen: state.isSettingsOpen, setSettingsOpen: state.setSettingsOpen,
+  })));
 
   // Handle window resizing for responsive desktop / mobile layout
   useEffect(() => {

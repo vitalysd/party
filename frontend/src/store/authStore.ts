@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { User } from '../types';
-import { API_BASE_URL } from '../utils/config';
-import { IS_DESKTOP } from '../utils/config';
+import { API_BASE_URL, IS_DESKTOP } from '../utils/config';
 import { readBrowserSession, writeBrowserSession, persistNativeSession, readNativeSession } from '../utils/sessionStorage';
 
 interface AuthState {
@@ -26,6 +25,37 @@ interface AuthState {
 const browserSession = readBrowserSession();
 let authGeneration = 0;
 let restoration: Promise<void> | undefined;
+
+// Each attempt owns its result. Logout or a newer attempt invalidates old responses.
+async function authenticate(path: 'login' | 'register', body: Record<string, string>, fallback: string): Promise<boolean> {
+  const generation = ++authGeneration;
+  useAuthStore.setState({ isLoading: true, error: null });
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/${path}`, {
+      signal: AbortSignal.timeout(15000),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (generation !== authGeneration) return false;
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : fallback);
+    if (typeof data.access_token !== 'string' || !data.access_token || typeof data.user?.id !== 'string') {
+      throw new Error('Сервер вернул некорректный ответ. Попробуйте снова.');
+    }
+    useAuthStore.getState().setAuth(data.access_token, data.user);
+    return true;
+  } catch (error: unknown) {
+    if (generation === authGeneration) {
+      useAuthStore.setState({ error: error instanceof Error && error.name === 'TimeoutError'
+        ? 'Сервер не ответил. Проверьте подключение и попробуйте снова.'
+        : error instanceof Error ? error.message : fallback });
+    }
+    return false;
+  } finally {
+    if (generation === authGeneration) useAuthStore.setState({ isLoading: false });
+  }
+}
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: browserSession.token,
@@ -58,70 +88,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAuth: (token: string, user: User) => {
     authGeneration++;
     writeBrowserSession(token, user);
-    set({ token, user, isAuthenticated: true, sessionReady: true, error: null });
+    set({ token, user, isAuthenticated: true, sessionReady: true, isLoading: false, error: null });
   },
 
-  login: async (username: string, password: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-        signal: AbortSignal.timeout(15000),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
+  login: (username, password) => authenticate('login', { username, password }, 'Проверьте логин и пароль'),
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(typeof data.detail === 'string' ? data.detail : 'Проверьте логин и пароль');
-      }
-
-      const data = await response.json();
-      get().setAuth(data.access_token, data.user);
-      return true;
-    } catch (err: any) {
-      set({ error: err.name === 'TimeoutError' ? 'Сервер не ответил. Проверьте подключение и попробуйте снова.' : err.message, isLoading: false });
-      return false;
-    } finally {
-      set({ isLoading: false });
-    }
-  },
-
-  register: async (username: string, displayName: string, password: string, inviteCode: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
-        signal: AbortSignal.timeout(15000),
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          display_name: displayName,
-          password,
-          invite_code: inviteCode,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(typeof data.detail === 'string' ? data.detail : 'Проверьте поля: пароль — от 8 символов, логин и имя не должны быть пустыми');
-      }
-
-      const data = await response.json();
-      get().setAuth(data.access_token, data.user);
-      return true;
-    } catch (err: any) {
-      set({ error: err.message, isLoading: false });
-      return false;
-    } finally {
-      set({ isLoading: false });
-    }
-  },
+  register: (username, displayName, password, inviteCode) => authenticate('register', {
+    username, display_name: displayName, password, invite_code: inviteCode,
+  }, 'Проверьте поля: пароль — от 8 символов, логин и имя не должны быть пустыми'),
 
   logout: () => {
     authGeneration++;
     writeBrowserSession(null, null);
-    set({ token: null, user: null, isAuthenticated: false, sessionReady: true, error: null });
+    set({ token: null, user: null, isAuthenticated: false, sessionReady: true, isLoading: false, error: null });
   },
 
   fetchMe: async () => {

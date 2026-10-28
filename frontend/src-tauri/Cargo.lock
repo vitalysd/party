@@ -2622,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "pati"
-version = "1.1.4"
+version = "1.1.5"
 dependencies = [
  "serde",
  "serde_json",

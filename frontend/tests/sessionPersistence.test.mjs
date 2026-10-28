@@ -105,3 +105,42 @@ test('network failure keeps saved login; revoked credentials clear it', async ()
   assert.equal(first.auth.getState().isAuthenticated, false);
   assert.equal(native.session, null);
 });
+
+test('late login cannot restore an account after explicit logout', async () => {
+  const { auth, flush } = await boot();
+  let resolve;
+  globalThis.fetch = () => new Promise(done => { resolve = done; });
+  const request = auth.getState().login('test', 'password');
+  auth.getState().logout();
+  resolve({ ok: true, json: async () => ({ access_token: 'late', user }) });
+  assert.equal(await request, false);
+  await flush();
+  assert.equal(auth.getState().token, null);
+  assert.equal(auth.getState().isLoading, false);
+});
+
+test('latest authentication attempt owns both loading state and result', async () => {
+  const { auth, flush } = await boot();
+  const responses = [];
+  globalThis.fetch = () => new Promise(resolve => responses.push(resolve));
+  const first = auth.getState().login('old', 'password');
+  const second = auth.getState().register('new', 'New', 'password', 'invite');
+  responses[0]({ ok: false, json: async () => ({ detail: 'Old failure' }) });
+  assert.equal(await first, false);
+  assert.equal(auth.getState().isLoading, true);
+  assert.equal(auth.getState().error, null);
+  responses[1]({ ok: true, json: async () => ({ access_token: 'new', user }) });
+  assert.equal(await second, true);
+  await flush();
+  assert.equal(auth.getState().token, 'new');
+  assert.equal(auth.getState().isLoading, false);
+});
+
+test('malformed success response does not create a broken session', async () => {
+  const { auth } = await boot();
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({}) });
+  assert.equal(await auth.getState().login('test', 'password'), false);
+  assert.equal(auth.getState().isAuthenticated, false);
+  assert.equal(auth.getState().isLoading, false);
+  assert.ok(auth.getState().error);
+});

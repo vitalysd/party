@@ -5,6 +5,7 @@ import { API_BASE_URL, WS_BASE_URL } from '../utils/config';
 import { useAuthStore } from './authStore';
 import { restoreOutbox, saveOutbox, clearOutbox } from '../utils/outbox';
 import { receiveCallSignal, reconnectVoiceSignals } from '../utils/voiceSignals';
+import { writeBrowserSession } from '../utils/sessionStorage';
 
 interface ChatState {
   channels: Channel[];
@@ -43,6 +44,7 @@ let wsReconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 const historyRequests = new Map<string, symbol>();
 const historyLoadedAt = new Map<string, number>();
 const historyInFlight = new Map<string, Promise<void>>();
+let navigationRequest = 0;
 
 export const useChatStore = create<ChatState>((set, get) => ({
   channels: [],
@@ -107,6 +109,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   setActiveChannel: (channelId: string) => {
+    navigationRequest++;
     set({ isLoadingMessages: historyInFlight.has(channelId) });
     const socket = get().socket;
 
@@ -142,7 +145,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       loadingOlder: { ...state.loadingOlder, [channelId]: false },
       historyErrors: { ...state.historyErrors, [channelId]: null },
     }));
-    set({ isLoadingMessages: true });
+    if (get().activeChannelId === channelId) set({ isLoadingMessages: true });
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/channels/${channelId}/messages?limit=50`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -294,6 +297,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   openDM: async (targetUserId: string, activate = true) => {
     const token = useAuthStore.getState().token;
     if (!token) return null;
+    const request = activate ? ++navigationRequest : navigationRequest;
 
     const cached = get().channels.find(channel => channel.is_direct && channel.members.length === 2
       && channel.members.some(member => member.user_id === targetUserId)
@@ -317,7 +321,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             channels: exists ? state.channels : [...state.channels, dmChannel],
           };
         });
-        if (activate) get().setActiveChannel(dmChannel.id);
+        if (activate && navigationRequest === request) get().setActiveChannel(dmChannel.id);
         return dmChannel.id;
       }
     } catch (err) {
@@ -349,6 +353,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       if (res.ok) {
         const data = await res.json();
+        if (useAuthStore.getState().token !== token) return null;
         return {
           url: data.url,
           filename: data.filename,
@@ -395,6 +400,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const ws = new WebSocket(`${WS_BASE_URL}?token=${token}`);
 
     ws.onopen = () => {
+      if (useAuthStore.getState().token !== token || get().socket !== ws) return;
       historyLoadedAt.clear();
       for (const channelId of Object.keys(get().messages)) {
         if (get().channels.some(channel => channel.id === channelId)) ws.send(JSON.stringify({
@@ -515,7 +521,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               avatar_url: avatar_url !== undefined ? avatar_url : currentAuth.avatar_url,
               custom_activity: custom_activity ?? currentAuth.custom_activity,
             };
-            localStorage.setItem('pati_user', JSON.stringify(updatedAuth));
+            writeBrowserSession(token, updatedAuth);
             useAuthStore.setState({ user: updatedAuth });
           }
         }
@@ -525,6 +531,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
 
     ws.onclose = () => {
+      if (useAuthStore.getState().token !== token || get().socket !== ws) return;
       set({ socket: null });
       if (wsReconnectTimeout) {
         clearTimeout(wsReconnectTimeout);
@@ -562,14 +569,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
 // Clear private data immediately when the account changes, before React effects run.
 useAuthStore.subscribe((state, previous) => {
-  if (state.token === previous.token) return;
-  clearOutbox(previous.user?.id);
+  if (state.token === previous.token && state.user?.id === previous.user?.id) return;
+  navigationRequest++;
+  // Restoring/refreshing credentials for the same account must preserve its outbox.
+  if (previous.user?.id !== state.user?.id) clearOutbox(previous.user?.id);
+  const restoredMessages = restoreOutbox(state.user?.id);
   historyRequests.clear();
   historyLoadedAt.clear();
   historyInFlight.clear();
   useChatStore.getState().disconnectWebSocket();
   useChatStore.setState({
-    channels: [], users: [], unreadCounts: {}, uploadError: null, activeChannelId: null, messages: {},
+    channels: [], users: [], unreadCounts: {}, uploadError: null, activeChannelId: null, messages: restoredMessages,
     typingUsers: {}, replyingTo: null, isLoadingMessages: false,
     hasMoreMessages: {}, loadingOlder: {}, historyErrors: {},
   });

@@ -1,6 +1,6 @@
 [package]
 name = "pati"
-version = "1.1.4"
+version = "1.1.5"
 description = "пати — рядом со своими"
 edition = "2021"
 

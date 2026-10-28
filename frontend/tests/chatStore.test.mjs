@@ -239,3 +239,60 @@ test('background DM increments unread once and opening it clears the badge', () 
   chat.getState().setActiveChannel('dm');
   assert.equal(chat.getState().unreadCounts.dm, 0);
 });
+
+
+test('background history does not show a spinner in the active chat', async () => {
+  let resolve;
+  globalThis.fetch = () => new Promise(done => { resolve = done; });
+  const request = chat.getState().ensureMessages('background');
+  assert.equal(chat.getState().isLoadingMessages, false);
+  resolve({ ok: true, json: async () => [] });
+  await request;
+  assert.equal(chat.getState().isLoadingMessages, false);
+});
+
+test('upload completed after logout cannot be attached by the next account', async () => {
+  let resolve;
+  globalThis.fetch = () => new Promise(done => { resolve = done; });
+  const request = chat.getState().uploadFile(new File(['test'], 'test.txt'), {channelId:'chat'});
+  auth.getState().logout();
+  auth.getState().setAuth('other-token', {id:'other'});
+  resolve({ ok: true, json: async () => ({url:'/private-file', filename:'test.txt'}) });
+  assert.equal(await request, null);
+});
+
+test('restored account loads its persisted outbox and token refresh preserves it', () => {
+  auth.getState().logout();
+  const pending = {...message('temp'), sender_id:'restored', client_request_id:'request', is_pending:true};
+  storage.set('pati_outbox:restored', JSON.stringify([pending]));
+  auth.getState().setAuth('restored-token', {id:'restored'});
+  assert.equal(chat.getState().messages.chat[0].is_failed, true);
+  auth.getState().setAuth('refreshed-token', {id:'restored'});
+  assert.equal(chat.getState().messages.chat[0].client_request_id, 'request');
+  auth.getState().logout();
+  assert.equal(storage.has('pati_outbox:restored'), false);
+  assert.deepEqual(chat.getState().messages, {});
+});
+
+test('an obsolete socket close cannot disconnect the replacement socket', () => {
+  chat.getState().initWebSocket();
+  const old = chat.getState().socket;
+  const replacement = new WebSocket();
+  chat.setState({socket:replacement});
+  old.onclose();
+  assert.equal(chat.getState().socket, replacement);
+  chat.getState().disconnectWebSocket();
+});
+
+
+test('delayed DM creation does not pull the user away from a newer selection', async () => {
+  let resolve;
+  globalThis.fetch = () => new Promise(done => { resolve = done; });
+  const opening = chat.getState().openDM('friend');
+  globalThis.fetch = async () => ({ok:true, json:async()=>[]});
+  chat.getState().setActiveChannel('chosen-room');
+  resolve({ok:true, json:async()=>({id:'late-dm',is_direct:true,members:[]})});
+  assert.equal(await opening, 'late-dm');
+  assert.equal(chat.getState().activeChannelId, 'chosen-room');
+  assert.ok(chat.getState().channels.some(channel => channel.id === 'late-dm'));
+});

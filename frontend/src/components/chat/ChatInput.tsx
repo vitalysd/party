@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useChatStore } from '../../store/chatStore';
 import { Attachment } from '../../types';
 import { Plus, Smile, ArrowUp, X, Loader2 } from 'lucide-react';
@@ -22,10 +23,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { sendMessage, replyingTo, setReplyingTo, sendTyping, uploadFile, uploadError } = useChatStore();
+  const { sendMessage, replyingTo, setReplyingTo, sendTyping, uploadFile, uploadError } = useChatStore(useShallow(state => ({
+    sendMessage: state.sendMessage, replyingTo: state.replyingTo,
+    setReplyingTo: state.setReplyingTo, sendTyping: state.sendTyping,
+    uploadFile: state.uploadFile, uploadError: state.uploadError,
+  })));
+
+  useEffect(() => () => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    sendTyping(channelId, false);
+  }, [channelId, sendTyping]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       if (!isSending) {
         handleSend();
@@ -34,7 +44,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleSend = async () => {
-    if (isSending) return;
+    if (isSending || isUploading) return;
     const trimmed = content.trim();
     if (!trimmed && attachedFiles.length === 0) return;
 
@@ -52,6 +62,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     // Stop typing indicator
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     sendTyping(channelId, false);
 
     try {
@@ -111,6 +122,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <span className="truncate text-pati-text-muted">{replyingTo.content}</span>
           </div>
           <button
+            aria-label="Отменить ответ"
             onClick={() => setReplyingTo(null)}
             className="p-1 text-pati-text-muted hover:text-white rounded-full hover:bg-pati-surface-hover transition"
           >
@@ -130,6 +142,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             >
               <span className="truncate max-w-[120px]">{att.filename}</span>
               <button
+                aria-label={`Удалить вложение ${att.filename}`}
                 onClick={() =>
                   setAttachedFiles(prev => prev.filter((_, i) => i !== idx))
                 }
@@ -188,6 +201,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         {/* Text Area */}
         <textarea
+          aria-label={placeholder}
           ref={textareaRef}
           value={content}
           onChange={handleChange}
@@ -215,7 +229,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <button
           type="button"
           onClick={handleSend}
-          disabled={!content.trim() && attachedFiles.length === 0}
+          disabled={isSending || isUploading || (!content.trim() && attachedFiles.length === 0)}
           className="w-8 h-8 rounded-xl bg-pati-accent hover:bg-pati-accent-hover active:scale-95 text-white flex items-center justify-center transition disabled:opacity-40 disabled:pointer-events-none shrink-0 shadow-md shadow-pati-accent/20"
           title="Отправить (Enter)"
         >

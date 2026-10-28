@@ -48,7 +48,8 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS setup
+# CORS must wrap rate limiting so desktop clients can read 429 responses.
+app.add_middleware(AuthRateLimit)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -56,7 +57,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(AuthRateLimit)
 
 @app.get('/health')
 async def health():
