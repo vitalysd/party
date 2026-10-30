@@ -1,402 +1,391 @@
-import { copyInvite } from '../../utils/invite';
-import React, { useState } from 'react';
-import { useUIStore } from '../../store/uiStore';
-import { useChatStore } from '../../store/chatStore';
-import { useVoiceStore } from '../../store/voiceStore';
-import { useAuthStore } from '../../store/authStore';
-import { Avatar } from '../ui/Avatar';
-import { MobileChatView } from '../chat/MobileChatView';
-import { VoiceRoomView } from '../voice/VoiceRoomView';
+import { useEffect, useRef, useState } from "react";
 import {
   MessageSquare,
   Users,
-  Radio,
+  Headphones,
   Search,
   SquarePen,
-  ChevronRight,
-  Gamepad2,
-  Phone,
   UserPlus,
-  SlidersHorizontal,
-} from 'lucide-react';
+  ArrowLeft,
+} from "lucide-react";
+import { useUIStore } from "../../store/uiStore";
+import { useChatStore } from "../../store/chatStore";
+import { useVoiceStore } from "../../store/voiceStore";
+import { useAuthStore } from "../../store/authStore";
+import { Avatar } from "../ui/Avatar";
+import { RoomIcon } from "../ui/RoomIcon";
+import { MobileChatView } from "../chat/MobileChatView";
+import { VoiceRoomView } from "../voice/VoiceRoomView";
+import { RoomVoicePanel } from "../voice/RoomVoicePanel";
+import { copyInvite } from "../../utils/invite";
+import { conversationRows, conversationTime } from "../../utils/conversations";
 
-export const MobileLayout: React.FC = () => {
+export function MobileLayout() {
   const { activeTab, setActiveTab, setSettingsOpen } = useUIStore();
-  const {
-    channels,
-    users,
-    activeChannelId,
-    setActiveChannel,
-    openDM,
-    messages,
-  } = useChatStore();
-
-  const { isConnected, participants, currentRoomName, joinDefaultVoice, joinDirectVoice } = useVoiceStore();
-  const { user } = useAuthStore();
-
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [chatFilter, setChatFilter] = useState<'all' | 'unread'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [chatError, setChatError] = useState('');
-
-  const displayFriends = users.filter(u => u.id !== user?.id).map(u => {
-    const dm = channels.find(c => c.is_direct && c.members.some(m => m.user_id === u.id));
-    const latest = dm ? messages[dm.id]?.at(-1) : undefined;
-    return { ...u, activity: u.custom_activity || '', lastMsg: latest?.content || dm?.last_message || 'Открыть переписку', time: latest ? new Date(latest.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '', unread: dm?.unread_count || 0 };
-  });
-
-  const onlineFriends = displayFriends.filter(f => f.status === 'online');
-
-  // Find squad channel
-  const squadChannel = channels.find(c => !c.is_direct) || {
-    id: '',
-    name: 'Вечерний сквад',
-    description: 'Нет доступных каналов',
-  };
-
-  const handleOpenChannel = (channelId: string) => {
-    if (!channelId) { setChatError('Нет доступных каналов'); return; }
-    setChatError('');
-    setActiveTab('chats');
-    setActiveChannel(channelId);
-    setActiveChatId(channelId);
-  };
-
-  const handleOpenFriendDM = async (friendId: string) => {
-    setChatError('');
-    const realUser = users.find(u => u.id === friendId);
-    if (realUser) {
-      const channelId = await openDM(friendId);
-      if (channelId) {
-        setActiveTab('chats');
-        setActiveChatId(channelId);
-        return;
-      }
-    }
-    setChatError('Не удалось открыть личный чат. Попробуйте ещё раз.');
-  };
-
-  // If user opened a chat conversation, show dedicated MobileChatView matching Screenshot 5
-  if (activeChatId && activeTab === 'chats') {
-    return <MobileChatView key={activeChannelId} onBack={() => setActiveChatId(null)} />;
+  const { channels, users, messages, setActiveChannel, openDM } =
+    useChatStore();
+  const user = useAuthStore((state) => state.user);
+  const connected = useVoiceStore(
+    (state) => state.isConnected || state.isConnecting || !!state.call,
+  );
+  const roomName = useVoiceStore((state) => state.currentRoomName);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [voiceId, setVoiceId] = useState<string | null>(null);
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [notice, setNotice] = useState("");
+  const [opening, setOpening] = useState(false);
+  const navigation = useRef(0);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const resize = () => {
+      if (!viewport || viewport.scale !== 1) return;
+      document.documentElement.style.setProperty(
+        "--mobile-height",
+        `${viewport.height}px`,
+      );
+    };
+    resize();
+    viewport?.addEventListener("resize", resize);
+    return () => {
+      viewport?.removeEventListener("resize", resize);
+      document.documentElement.style.removeProperty("--mobile-height");
+    };
+  }, []);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 3000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  useEffect(
+    () => () => {
+      navigation.current++;
+    },
+    [],
+  );
+  const rows = conversationRows(channels, users, messages, user?.id);
+  const query = search.trim().toLocaleLowerCase();
+  const filtered = rows.filter(
+    (row) =>
+      row.title.toLocaleLowerCase().includes(query) &&
+      (filter !== "unread" || row.unread > 0) &&
+      (filter !== "rooms" || !row.channel.is_direct),
+  );
+  const friends = users.filter(
+    (friend) =>
+      friend.id !== user?.id &&
+      friend.display_name.toLocaleLowerCase().includes(query),
+  );
+  const rooms = channels.filter((channel) => !channel.is_direct);
+  const voiceChannel = rooms.find((channel) => channel.id === voiceId);
+  function switchTab(tab: "chats" | "friends" | "voice") {
+    navigation.current++;
+    setOpening(false);
+    setChatId(null);
+    setSearch("");
+    setVoiceId(null);
+    setActiveTab(tab);
+    useChatStore.setState({
+      activeChannelId: null,
+      replyingTo: null,
+      isLoadingMessages: false,
+    });
   }
-
+  function openChat(id: string) {
+    navigation.current++;
+    setActiveChannel(id);
+    setChatId(id);
+    setActiveTab("chats");
+  }
+  async function openFriend(id: string) {
+    const request = ++navigation.current;
+    setOpening(true);
+    const channelId = await openDM(id, false);
+    if (request !== navigation.current) return;
+    setOpening(false);
+    if (channelId) openChat(channelId);
+    else setNotice("Не удалось открыть чат. Попробуйте ещё раз.");
+  }
+  if (chatId && activeTab === "chats")
+    return (
+      <MobileChatView
+        key={chatId}
+        onBack={() => {
+          navigation.current++;
+          setChatId(null);
+          useChatStore.setState({
+            activeChannelId: null,
+            replyingTo: null,
+            isLoadingMessages: false,
+          });
+        }}
+      />
+    );
   return (
-    <div className="flex flex-col h-full bg-pati-dark text-white overflow-hidden select-none">
-      {chatError && <p role="alert" className="p-3 text-sm text-pati-red-text">{chatError}</p>}
-      {/* Tab Content Container */}
-      <div className="flex-1 overflow-y-auto">
-        {activeTab === 'voice' && <VoiceRoomView />}
-
-        {/* Friends Tab on Mobile */}
-        {activeTab === 'friends' && (
-          <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between pt-1">
-              <div>
-                <h1 className="text-xl font-black text-white tracking-tight">Друзья</h1>
-                <p className="text-xs text-pati-text-muted">Ваша компания — всегда на связи</p>
-              </div>
+    <div className="mobile-shell flex h-full flex-col bg-pati-dark text-pati-text-primary">
+      <header className="shrink-0 px-4 pt-3 pb-2 bg-pati-panel">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {activeTab === "chats"
+              ? "Чаты"
+              : activeTab === "friends"
+                ? "Контакты"
+                : "Разговоры"}
+          </h1>
+          <div className="flex items-center gap-1">
+            <button
+              className="mobile-touch text-pati-accent-text"
+              aria-label={
+                activeTab === "friends" ? "Пригласить друга" : "Новое сообщение"
+              }
+              onClick={() => {
+                if (activeTab !== "friends") switchTab("friends");
+                else
+                  void copyInvite()
+                    .then(() => setNotice("Код приглашения скопирован"))
+                    .catch(() => setNotice("Не удалось создать приглашение"));
+              }}
+            >
+              {activeTab === "friends" ? (
+                <UserPlus size={22} />
+              ) : (
+                <SquarePen size={22} />
+              )}
+            </button>
+            <button
+              className="mobile-touch"
+              aria-label="Настройки профиля"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Avatar
+                name={user?.display_name || "Вы"}
+                url={user?.avatar_url}
+                size="sm"
+              />
+            </button>
+          </div>
+        </div>
+        {activeTab !== "voice" && (
+          <label className="flex items-center gap-2 rounded-xl bg-pati-surface px-3 h-11 mb-2 text-pati-text-muted">
+            <Search size={19} aria-hidden="true" />
+            <input
+              type="search"
+              aria-label="Поиск"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={
+                activeTab === "friends" ? "Поиск контактов" : "Поиск переписок"
+              }
+              className="min-w-0 flex-1 bg-transparent text-base text-pati-text-primary outline-none placeholder:text-pati-text-muted"
+            />
+          </label>
+        )}
+        {activeTab === "chats" && (
+          <div className="flex gap-2 py-1" aria-label="Фильтр переписок">
+            {[
+              ["all", "Все"],
+              ["unread", "Непрочитанные"],
+              ["rooms", "Комнаты"],
+            ].map(([value, label]) => (
               <button
-                onClick={() => {
-                  void copyInvite().then(() => alert('Код приглашения скопирован')).catch(() => alert('Не удалось создать приглашение'));
-                  
-                }}
-                className="p-2.5 bg-pati-accent hover:bg-pati-accent-hover text-white rounded-xl shadow-md shadow-pati-accent/20"
-                title="Добавить друга"
+                key={value}
+                aria-pressed={filter === value}
+                onClick={() => setFilter(value)}
+                className={`min-h-11 px-3 rounded-full text-sm font-medium ${filter === value ? "bg-pati-accent/20 text-pati-accent-text" : "text-pati-text-muted"}`}
               >
-                <UserPlus className="w-4 h-4" />
+                {label}
               </button>
-            </div>
-
-            <div className="space-y-2">
-              {displayFriends.map(f => (
-                <div
-                  key={f.id}
-                  onClick={() => handleOpenFriendDM(f.id)}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-pati-panel border border-pati-border active:scale-[0.99] transition cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar
-                      name={f.display_name}
-                      url={f.avatar_url}
-                      size="md"
-                      status={f.status}
-                    />
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-white truncate">
-                        {f.display_name}
-                      </div>
-                      <div className="text-xs text-pati-text-muted truncate mt-0.5">
-                        {f.activity}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        joinDirectVoice(f.id);
-                        setActiveTab('voice');
-                      }}
-                      className="p-2 rounded-xl bg-pati-surface-elevated text-pati-accent hover:bg-pati-surface-hover"
-                      title="Позвонить"
-                    >
-                      <Phone className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
         )}
-
-        {/* Chats Tab on Mobile - Exact match to Screenshot 4 */}
-        {activeTab === 'chats' && (
-          <div className="p-4 space-y-3.5">
-            {/* Header: Title + Subtitle + Actions */}
-            <div className="flex items-center justify-between pt-1">
-              <div>
-                <h1 className="text-2xl font-black text-white tracking-tight">Чаты</h1>
-                <p className="text-xs text-pati-text-dim">пати · рядом со своими</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSettingsOpen(true)}
-                  className="p-2 bg-pati-surface border border-pati-border text-white rounded-xl hover:bg-pati-surface-elevated transition active:scale-95"
-                  title="Настройки профиля"
-                >
-                  <SlidersHorizontal className="w-4 h-4 text-pati-accent-text" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (displayFriends.length > 0) {
-                      handleOpenFriendDM(displayFriends[0].id);
-                    }
-                  }}
-                  className="p-2 bg-pati-surface border border-pati-border text-white rounded-xl hover:bg-pati-surface-elevated transition active:scale-95"
-                  title="Написать"
-                >
-                  <SquarePen className="w-4 h-4 text-pati-accent-text" />
-                </button>
-              </div>
-            </div>
-
-            {/* Search Input */}
-            <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-pati-panel border border-pati-border rounded-2xl text-xs text-pati-text-muted">
-              <Search className="w-4 h-4 text-pati-text-dim shrink-0" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Найти друга или чат"
-                className="bg-transparent text-white placeholder-pati-text-disabled focus:outline-none w-full text-xs"
-              />
-            </div>
-
-            {/* Voice Pinned Quick Banner (Screenshot 4) */}
-            <button
-              onClick={() => {
-                joinDefaultVoice();
-                setActiveTab('voice');
-              }}
-              className="w-full p-3 rounded-2xl bg-gradient-to-r from-pati-accent-panel to-pati-accent-panel-end border border-pati-accent-border flex items-center justify-between text-left shadow-lg active:scale-[0.99] transition"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-pati-accent/20 text-pati-accent-light flex items-center justify-center shrink-0">
-                  <Radio className="w-4 h-4 animate-pulse text-pati-accent" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[11px] font-bold text-pati-green-light flex items-center gap-1.5 leading-tight">
-                    <span className="w-1.5 h-1.5 rounded-full bg-pati-green-light shrink-0" />
-                    <span>{isConnected ? `В голосе · ${participants.length}` : 'Подключиться к голосу'}</span>
-                  </div>
-                  <div className="text-xs text-white font-bold truncate mt-0.5">
-                    Вечерний сквад
-                  </div>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-pati-text-muted shrink-0" />
-            </button>
-
-            {/* Filter Pills */}
-            <div className="flex items-center gap-2">
+      </header>
+      {notice && (
+        <p
+          role="status"
+          className="shrink-0 px-4 py-2 bg-pati-surface text-sm text-pati-accent-text"
+        >
+          {notice}
+        </p>
+      )}
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {activeTab === "chats" && (
+          <>
+            {connected && (
               <button
-                onClick={() => setChatFilter('all')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
-                  chatFilter === 'all'
-                    ? 'bg-pati-accent-panel text-pati-accent-text shadow-sm'
-                    : 'bg-pati-panel text-pati-text-dim'
-                }`}
+                onClick={() => switchTab("voice")}
+                className="w-full flex items-center gap-3 px-5 py-3 bg-pati-green/10 text-pati-green-text text-sm"
               >
-                Все
+                <Headphones size={18} />
+                <span className="truncate">
+                  Вернуться к разговору{roomName ? ` · ${roomName}` : ""}
+                </span>
               </button>
-              <button
-                onClick={() => setChatFilter('unread')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
-                  chatFilter === 'unread'
-                    ? 'bg-pati-accent-panel text-pati-accent-text shadow-sm'
-                    : 'bg-pati-panel text-pati-text-dim'
-                }`}
-              >
-                Непрочитанные · {displayFriends.reduce((sum, friend) => sum + friend.unread, 0)}
-              </button>
-            </div>
-
-            {/* Chats List */}
-            <div className="space-y-1.5">
-              {/* Group Squad Channel */}
-              {(!searchQuery || squadChannel.name.toLowerCase().includes(searchQuery.toLowerCase())) && (
-                <div
-                  onClick={() => handleOpenChannel(squadChannel.id)}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-pati-panel border border-pati-border active:scale-[0.99] transition cursor-pointer"
+            )}
+            {filtered.map(
+              ({ channel, partner, title, preview, timestamp, unread }) => (
+                <button
+                  key={channel.id}
+                  onClick={() => openChat(channel.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-pati-surface-hover"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-11 h-11 rounded-2xl bg-pati-surface-hover flex items-center justify-center text-pati-accent-text border border-pati-border-strong shrink-0">
-                      <Gamepad2 className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-white truncate">
-                        {squadChannel.name}
-                      </div>
-                      <div className="text-xs text-pati-text-muted truncate mt-0.5">
-                        {messages[squadChannel.id]?.at(-1)?.content || 'Открыть канал'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                    <span className="text-[11px] text-pati-text-dim"></span>
-                  </div>
-                </div>
-              )}
-
-              {/* Friends DMs */}
-              {displayFriends
-                .filter(f => !searchQuery || f.display_name.toLowerCase().includes(searchQuery.toLowerCase()))
-                .filter(f => (chatFilter === 'unread' ? f.unread > 0 : true))
-                .map(item => (
-                  <div
-                    key={item.id}
-                    onClick={() => handleOpenFriendDM(item.id)}
-                    className="flex items-center justify-between p-3 rounded-2xl bg-pati-panel border border-pati-border active:scale-[0.99] transition cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Avatar
-                        name={item.display_name}
-                        url={item.avatar_url}
-                        size="lg"
-                        status={item.status}
-                      />
-                      <div className="min-w-0">
-                        <div className="text-sm font-bold text-white truncate">
-                          {item.display_name}
-                        </div>
-                        <div className="text-xs text-pati-text-muted truncate mt-0.5">
-                          {item.lastMsg}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                      <span className="text-[11px] text-pati-text-dim">{item.time}</span>
-                      {item.unread > 0 && (
-                        <span className="px-1.5 py-0.5 min-w-[18px] text-center rounded-full bg-pati-accent text-white text-[10px] font-bold">
-                          {item.unread}
+                  {channel.is_direct ? (
+                    <Avatar name={title} url={partner?.avatar_url} size="lg" />
+                  ) : (
+                    <span className="w-12 h-12 rounded-full shrink-0 flex items-center justify-center bg-pati-accent/15 text-pati-accent-text">
+                      <RoomIcon icon={channel.icon} className="w-6 h-6" />
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 border-b border-pati-border-subtle pb-3 -mb-3">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="truncate text-base font-semibold">
+                        {title}
+                      </span>
+                      <time className="shrink-0 text-[11px] text-pati-text-muted">
+                        {conversationTime(timestamp)}
+                      </time>
+                    </span>
+                    <span className="mt-1 flex items-center justify-between gap-3">
+                      <span className="truncate text-sm text-pati-text-muted">
+                        {preview}
+                      </span>
+                      {unread > 0 && (
+                        <span
+                          aria-label={`${unread} непрочитанных`}
+                          className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-pati-accent text-white text-xs text-center leading-5"
+                        >
+                          {unread > 99 ? "99+" : unread}
                         </span>
                       )}
-                    </div>
-                  </div>
-                ))}
-            </div>
-
-            {/* Friends Online Horizontal Section (Screenshot 4) */}
-            <div className="pt-2">
-              <div
-                onClick={() => setActiveTab('friends')}
-                className="flex items-center justify-between text-xs font-bold text-pati-text-muted mb-2.5 cursor-pointer"
-              >
-                <span>Друзья в сети · {onlineFriends.length}</span>
-                <ChevronRight className="w-4 h-4" />
-              </div>
-
-              <div className="flex items-center gap-3.5 overflow-x-auto pb-2 scrollbar-none">
-                {onlineFriends.map(f => (
-                  <div
-                    key={f.id}
-                    onClick={() => handleOpenFriendDM(f.id)}
-                    className="flex flex-col items-center gap-1 shrink-0 cursor-pointer active:scale-95 transition"
-                  >
-                    <Avatar
-                      name={f.display_name}
-                      url={f.avatar_url}
-                      size="lg"
-                      status="online"
-                    />
-                    <span className="text-[11px] font-semibold text-pati-text-secondary truncate max-w-[60px] text-center">
-                      {f.display_name}
                     </span>
-                  </div>
-                ))}
+                  </span>
+                </button>
+              ),
+            )}
+            {!filtered.length && (
+              <div className="px-8 py-16 text-center text-pati-text-muted">
+                <MessageSquare
+                  className="mx-auto mb-4 text-pati-accent"
+                  size={36}
+                />
+                <p>
+                  {query
+                    ? "Переписки не найдены"
+                    : filter === "unread"
+                      ? "Всё прочитано"
+                      : "Здесь появятся ваши переписки"}
+                </p>
+                <button
+                  onClick={() => switchTab("friends")}
+                  className="mt-4 min-h-11 text-pati-accent-text"
+                >
+                  Написать другу
+                </button>
               </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
-      </div>
-
-      {/* Bottom Navigation Bar - Exact match to Screenshot 4 */}
-      <nav className="h-16 bg-pati-panel border-t border-pati-border-subtle flex items-center justify-around shrink-0 px-3 z-10">
-        <button
-          onClick={() => setActiveTab('chats')}
-          className={`flex flex-col items-center gap-1 transition active:scale-95 ${
-            activeTab === 'chats' ? 'text-pati-accent' : 'text-pati-text-dim hover:text-white'
-          }`}
-        >
-          <div
-            className={`px-3 py-1 rounded-xl transition ${
-              activeTab === 'chats' ? 'bg-pati-accent/20' : ''
-            }`}
+        {activeTab === "friends" && (
+          <>
+            {opening && (
+              <p
+                role="status"
+                className="px-4 py-2 text-sm text-pati-text-muted"
+              >
+                Открываем чат…
+              </p>
+            )}
+            {friends.map((friend) => (
+              <button
+                key={friend.id}
+                disabled={opening}
+                onClick={() => void openFriend(friend.id)}
+                className="w-full flex gap-3 items-center px-4 py-3 text-left active:bg-pati-surface-hover disabled:opacity-60"
+              >
+                <Avatar
+                  name={friend.display_name}
+                  url={friend.avatar_url}
+                  size="lg"
+                  status={friend.status}
+                />
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold">
+                    {friend.display_name}
+                  </span>
+                  <span className="block truncate text-sm text-pati-text-muted mt-1">
+                    {friend.custom_activity ||
+                      (friend.status === "online" ? "В сети" : "Не в сети")}
+                  </span>
+                </span>
+              </button>
+            ))}
+            {!friends.length && (
+              <p className="p-8 text-center text-pati-text-muted">
+                {query
+                  ? "Никого не найдено"
+                  : "Пригласите друга по кнопке сверху"}
+              </p>
+            )}
+          </>
+        )}
+        {activeTab === "voice" &&
+          (connected ? (
+            <VoiceRoomView />
+          ) : voiceChannel ? (
+            <div className="h-full flex flex-col p-4">
+              <button
+                onClick={() => setVoiceId(null)}
+                className="flex items-center gap-2 min-h-11 text-pati-text-muted"
+              >
+                <ArrowLeft size={20} />
+                Все комнаты
+              </button>
+              <RoomVoicePanel channel={voiceChannel} />
+            </div>
+          ) : (
+            <div className="p-4">
+              <p className="text-sm text-pati-text-muted mb-4">
+                Выберите комнату, чтобы посмотреть участников и присоединиться.
+              </p>
+              {rooms.map((room) => (
+                <button
+                  key={room.id}
+                  onClick={() => setVoiceId(room.id)}
+                  className="w-full flex gap-3 items-center text-left py-4 border-b border-pati-border-subtle"
+                >
+                  <span className="mobile-touch rounded-full bg-pati-accent/15 text-pati-accent-text">
+                    <RoomIcon icon={room.icon} className="w-5 h-5" />
+                  </span>
+                  <span className="truncate font-medium">{room.name}</span>
+                </button>
+              ))}
+              {!rooms.length && (
+                <p className="text-pati-text-muted">Пока нет комнат</p>
+              )}
+            </div>
+          ))}
+      </main>
+      <nav
+        aria-label="Основная навигация"
+        className="mobile-bottom shrink-0 flex border-t border-pati-border-subtle bg-pati-panel"
+      >
+        {(
+          [
+            { id: "chats", label: "Чаты", Icon: MessageSquare },
+            { id: "friends", label: "Контакты", Icon: Users },
+            { id: "voice", label: "Разговоры", Icon: Headphones },
+          ] as const
+        ).map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            aria-current={activeTab === id ? "page" : undefined}
+            onClick={() => switchTab(id)}
+            className={`flex-1 min-h-16 flex flex-col items-center justify-center gap-1 text-[11px] font-medium ${activeTab === id ? "text-pati-accent-text" : "text-pati-text-muted"}`}
           >
-            <MessageSquare className="w-5 h-5" />
-          </div>
-          <span className="text-[10px] font-bold">Чаты</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('friends')}
-          className={`flex flex-col items-center gap-1 transition active:scale-95 ${
-            activeTab === 'friends' ? 'text-pati-accent' : 'text-pati-text-dim hover:text-white'
-          }`}
-        >
-          <div
-            className={`px-3 py-1 rounded-xl transition ${
-              activeTab === 'friends' ? 'bg-pati-accent/20' : ''
-            }`}
-          >
-            <Users className="w-5 h-5" />
-          </div>
-          <span className="text-[10px] font-bold">Друзья</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('voice');
-            if (!isConnected) joinDefaultVoice();
-          }}
-          className={`flex flex-col items-center gap-1 transition active:scale-95 ${
-            activeTab === 'voice' ? 'text-pati-accent' : 'text-pati-text-dim hover:text-white'
-          }`}
-        >
-          <div
-            className={`px-3 py-1 rounded-xl transition ${
-              activeTab === 'voice' ? 'bg-pati-accent/20' : ''
-            }`}
-          >
-            <Radio className="w-5 h-5" />
-          </div>
-          <span className="text-[10px] font-bold">Голос</span>
-        </button>
+            <Icon size={23} />
+            <span>{label}</span>
+          </button>
+        ))}
       </nav>
     </div>
   );
-};
+}

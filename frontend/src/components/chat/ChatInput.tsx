@@ -7,11 +7,13 @@ import { Plus, Smile, ArrowUp, X, Loader2 } from 'lucide-react';
 interface ChatInputProps {
   channelId: string;
   placeholder?: string;
+  mobile?: boolean;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   channelId,
   placeholder = 'Написать сообщение...',
+  mobile = false,
 }) => {
   const [content, setContent] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -35,7 +37,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [channelId, sendTyping]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    if (!mobile && e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       if (!isSending) {
         handleSend();
@@ -111,7 +113,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const quickEmojis = ['😀', '😂', '🔥', '❤️', '👍', '🎉', '🎮', '✌️', '😎', '👀', '💯'];
 
   return (
-    <div className="relative px-4 pb-4 pt-1 bg-pati-dark">
+    <div className={`relative shrink-0 bg-pati-dark ${mobile ? 'mobile-composer mobile-bottom px-2 pt-2 border-t border-pati-border-subtle' : 'px-4 pb-4 pt-1'}`}>
       {/* Reply Bar if active */}
       {replyingTo && (
         <div className="flex items-center justify-between px-3.5 py-1.5 mb-2 bg-pati-surface border border-pati-border rounded-xl text-xs text-pati-text-muted">
@@ -231,15 +233,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onClick={handleSend}
           disabled={isSending || isUploading || (!content.trim() && attachedFiles.length === 0)}
           className="w-8 h-8 rounded-xl bg-pati-accent hover:bg-pati-accent-hover active:scale-95 text-white flex items-center justify-center transition disabled:opacity-40 disabled:pointer-events-none shrink-0 shadow-md shadow-pati-accent/20"
-          title="Отправить (Enter)"
+          title={mobile ? 'Отправить' : 'Отправить (Enter)'}
         >
           <ArrowUp className="w-4 h-4 stroke-[2.5]" />
         </button>
       </div>
 
-      <div className="text-[10px] text-pati-text-disabled mt-1.5 px-2">
+      {!mobile && <div className="text-[10px] text-pati-text-disabled mt-1.5 px-2">
         Enter — отправить · Shift + Enter — новая строка
-      </div>
+      </div>}
     </div>
   );
 };
